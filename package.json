@@ -24,7 +24,9 @@
     "mammoth": "^1.11.0",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "openssh": "^1.1.0",
     "pdf-parse": "^2.4.5",
+    "sssh": "^0.0.2",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
