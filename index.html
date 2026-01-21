@@ -7,43 +7,18 @@
  <link rel="stylesheet" href="/assets/fonts/bootstrap.icons.min.css">
   <link rel="stylesheet" href="/assets/css/main.css">
  
- 
-  <title>Spelling & Grammar Checker</title>
-<script>
-(function () {
-  const box = document.createElement("div");
-  box.style.cssText = `
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    max-height:45%;
-    overflow:auto;
-    background:#000;
-    color:#0f0;
-    font:12px monospace;
-    z-index:999999;
-    padding:6px;
-  `;
-  document.addEventListener("DOMContentLoaded", () => document.body.appendChild(box));
-
-  function write(type, args) {
-    box.textContent += `[${type}] ` + args.map(a =>
-      typeof a === "object" ? JSON.stringify(a) : a
-    ).join(" ") + "\n";
-  }
-
-  ["log","warn","error"].forEach(t => {
-    const old = console[t];
-    console[t] = (...a) => { write(t, a); old.apply(console, a); };
-  });
-
-  window.onerror = (m,s,l,c,e) => write("ERR", [m, s+":"+l+":"+c]);
-  window.onunhandledrejection = e => write("PROMISE", [e.reason]);
-})();
-</script>
+ <title>Spelling & Grammar Checker</title>
 </head>
 <body>
+  
+  <!-- Loader Backdrop -->
+<!-- Loader Backdrop -->
+<div id="loader-backdrop">
+  <div class="loader-center">
+    <div class="spinner"></div>
+    <p>Click to enter</p>
+  </div>
+</div>
   <div class="site" id="web-app">
     <header id="masthed" class="site-header fixed-top sticky-header">
       <nav class="navbar-expand">
@@ -54,8 +29,7 @@
         </div>
       </nav>
     </header>
-
-    <div class="container-xxl my-5">
+<div class="container-xxl my-5">
       <div class="row justify-content-center">
         <form id="editorForm" class="wrapper position-relative">
           <input type="file" name="fileUpload" id="fileInput" class="d-none" />
@@ -107,8 +81,9 @@
     </div>
   </footer>
 </div>
-<script type="script" src="/assets/js/bootstrap.min.js"></script>
-<script type="script" src="/assets/js/main.js"></script>
+</div>
+<script src="/assets/js/bootstrap.min.js"></script>
+<script src="/assets/js/main.js"></script>
 
 </body>
 </html>
