@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+ <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+ <link rel="stylesheet" href="/assets/fonts/bootstrap.icons.min.css">
+  <link rel="stylesheet" href="/assets/css/main.css">
+ 
+ 
+  <title>Spelling & Grammar Checker</title>
+<script>
+(function () {
+  const box = document.createElement("div");
+  box.style.cssText = `
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    max-height:45%;
+    overflow:auto;
+    background:#000;
+    color:#0f0;
+    font:12px monospace;
+    z-index:999999;
+    padding:6px;
+  `;
+  document.addEventListener("DOMContentLoaded", () => document.body.appendChild(box));
+
+  function write(type, args) {
+    box.textContent += `[${type}] ` + args.map(a =>
+      typeof a === "object" ? JSON.stringify(a) : a
+    ).join(" ") + "\n";
+  }
+
+  ["log","warn","error"].forEach(t => {
+    const old = console[t];
+    console[t] = (...a) => { write(t, a); old.apply(console, a); };
+  });
+
+  window.onerror = (m,s,l,c,e) => write("ERR", [m, s+":"+l+":"+c]);
+  window.onunhandledrejection = e => write("PROMISE", [e.reason]);
+})();
+</script>
+</head>
+<body>
+  <div class="site" id="web-app">
+    <header id="masthed" class="site-header fixed-top sticky-header">
+      <nav class="navbar-expand">
+        <div class="site-logo">
+          <a class="navbrand" href="index.html">
+            <img src="logo.svg" class="logo" alt="GrammarChecker">
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <div class="container-xxl my-5">
+      <div class="row justify-content-center">
+        <form id="editorForm" class="wrapper position-relative">
+          <input type="file" name="fileUpload" id="fileInput" class="d-none" />
+        <textarea name="textContent" id="textarea" placeholder="Enter your text or Drop File..." class="form-control"></textarea>    </form>
+
+      <div class="d-flex flex-wrap toolbar mt-3 align-items-center">
+            <div id="dropOverlay" class="d-flex d-none justify-content-center align-items-center position-absolute top-0 start-0 w-100 h-100 bg-light bg-opacity-75">
+          <i class="bi bi-file-earmark-arrow-up display-1"></i>
+
+     
+        <div class="alert alert-primary text-center hover-alert mb-2 w-100" role="alert">
+          Drag & Drop your file here
+        </div>
+       
+               <div class="progress mt-2 w-100 d-none" id="fileProgress">
+          <div class="progress-bar" role="progressbar" style="width: 0%;"></div>
+          </div>
+      </div> 
+<div class="btn-group">
+  <!-- Paste from clipboard -->
+  <button type="button" id="pasteBtn" class="btn btn-outline-secondary" title="Paste">
+    <i class="bi bi-clipboard2-fill me-1"></i> Paste
+  </button>
+  <button type="button" id="clearBtn" class="btn btn-outline-secondary" title="Paste">
+ <i class="bi bi-eraser">Clear</i>
+  </button>
+
+
+  <!-- Upload file -->
+ <button type="button" id="uploadBtn" class="btn btn-primary" title="Upload">
+    <i class="bi bi-upload me-1"></i> Upload
+  </button>
+  <!-- Save text area content -->
+  <button type="button" id="cleanBtn" class="btn btn-warning" title="Save Text">
+    <i class="bi bi-file-earmark-text me-1"></i>fromat
+  </button>
+  <!-- Check grammar -->
+  <button type="button" id="checkBtn" class="btn btn-success" title="Check">
+    <i class="bi bi-check2-circle me-1"></i> Check
+  </button>
+</div> </div>
+  </div>
+
+  <footer class="container-xxl">
+    <div class="copy-right">
+      <p>
+        Burmese GrammarChecker tool © 2026
+      </p>
+    </div>
+  </footer>
+</div>
+<script type="script" src="/assets/js/bootstrap.min.js"></script>
+<script type="script" src="/assets/js/main.js"></script>
+
+</body>
+</html>
