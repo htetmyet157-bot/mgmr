@@ -1,107 +1,123 @@
+import 'dotenv/config';
 import express from "express";
-import session from "express-session";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import morgan from "morgan";
-import fs from "fs-extra";
 import path from "path";
-import { v4 as uuidv4 } from "uuid";
+import session from "express-session";
+import MySQLStore from "express-mysql-session";
+import fs from "fs";
+import util from "util";
+import { pool } from "./backend/db.js"; // your existing DB pool
 
-// ---------------- Config ----------------
+// Middleware & services
+import { headerCheck } from "./middleware/header.js";
+import { cookieGenerator } from "./middleware/cookieGenerator.js";
+import { cookieDBCheck } from "./middleware/cookieDBCheck.js";
+// Routes
+import Protectedapi from "./api-routes/protected.js";
+import external from "./api-routes/external.js";
+
 const app = express();
 const PORT = 3000;
+const projectRoot = process.cwd();
 
-// ---------------- Directories ----------------
-const projectRoot = process.cwd(); // project root
-const logDir = path.join(projectRoot, "logs");
-fs.ensureDirSync(logDir);
+// ===== Directories =====
+import fsExtra from "fs-extra";
+fsExtra.ensureDirSync(path.join(projectRoot, "logs"));
+fsExtra.ensureDirSync(path.join(projectRoot, "saved_texts"));
 
-// ---------------- Log files ----------------
-const accessLog = fs.createWriteStream(path.join(logDir, "access.log"), { flags: "a" });
-const visitorLog = fs.createWriteStream(path.join(logDir, "visitor.log"), { flags: "a" });
-const sessionLog = fs.createWriteStream(path.join(logDir, "session.log"), { flags: "a" });
+// ===== Morgan HTTP Logging =====
+const logStream = fs.createWriteStream(
+  path.join(projectRoot, "logs", "access.log"),
+  { flags: "a" }
+);
+app.use(morgan("combined", { stream: logStream }));
+app.use(morgan("dev"));
 
-// ---------------- Middleware ----------------
+// ===== Core Parsers =====
 app.use(cookieParser());
-app.use(helmet());
-app.use(morgan("combined", { stream: accessLog }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ---------------- Session ----------------
 app.use(
-  session({
-    secret: "super-secret-key",
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-      maxAge: 15 * 60 * 1000, // 15 min
-      httpOnly: true,
-      sameSite: "strict",
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+      },
     },
   })
 );
 
-// ---------------- Session Logging with Duplicate Check ----------------
-const lastSessionState = new Map(); // key: sessionID, value: JSON string of last state
+// ===== SQL Logging =====
+const sqlLogStream = fs.createWriteStream(
+  path.join(projectRoot, "logs", "sql.log"),
+  { flags: "a" } // append mode
+);
 
-app.use((req, res, next) => {
-  try {
-    // Assign visitor ID if new
-    if (!req.session.visitorId) {
-      req.session.visitorId = uuidv4();
-      visitorLog.write(`[${new Date().toISOString()}] New visitor: ${req.session.visitorId}\n`);
-    }
+const originalQuery = pool.query.bind(pool);
+pool.query = async function (...args) {
+  const sql = args[0];
+  const values = args[1];
+  const timestamp = new Date().toISOString();
 
-    // Queue placeholder (simulate integer value)
-    if (!req.session.queuePosition) req.session.queuePosition = Math.floor(Math.random() * 100);
+  sqlLogStream.write(`[${timestamp}] SQL: ${sql}\n`);
+  if (values) sqlLogStream.write(`[${timestamp}] Values: ${util.inspect(values)}\n`);
 
-    // Persistent cookie for 1 month
-    res.cookie("visitorId", req.session.visitorId, {
-      httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      sameSite: "strict",
-    });
+  return originalQuery(...args);
+};
 
-    // Current session state (ignore timestamp)
-    const currentState = JSON.stringify({
-      visitorId: req.session.visitorId,
-      queuePosition: req.session.queuePosition,
-    });
-
-    // Only log if state changed
-    if (lastSessionState.get(req.session.id) !== currentState) {
-      sessionLog.write(
-        `[${new Date().toISOString()}] SessionID: ${req.session.id}, VisitorID: ${req.session.visitorId}, Queue: ${req.session.queuePosition}\n`
-      );
-      lastSessionState.set(req.session.id, currentState);
-    }
-
-  } catch (err) {
-    console.error("Session middleware error:", err);
-  }
-
-  next();
-});
-
-// ---------------- Serve static files ----------------
+// ===== Static files =====
 app.use("/assets", express.static(path.join(projectRoot, "assets")));
+app.get("/", (req, res) => res.sendFile(path.join(projectRoot, "index.html")));
 
-// Serve index.html from project root
-app.get("/", (req, res) => {
-  res.sendFile(path.join(projectRoot, "index.html"), (err) => {
-    if (err) console.error("Error sending index.html:", err);
+// ===== API boundary =====
+app.use(headerCheck);
+
+// Test DB connection
+pool.getConnection()
+  .then(conn => {
+    console.log("[DB] Connected successfully as mgmr_user");
+    conn.release();
+  })
+  .catch(err => {
+    console.error("[DB] Connection failed:", err);
   });
-});
 
-// ---------------- Example queue API ----------------
-app.post("/queue", (req, res) => {
-  const { position } = req.body;
-  req.session.queuePosition = position ?? null;
-  res.json({ visitorId: req.session.visitorId, queuePosition: req.session.queuePosition });
-});
+// ===== Session Setup =====
+const MySQLSessionStore = MySQLStore(session);
+const sessionStore = new MySQLSessionStore(
+  {
+    tableName: "sessions",
+    checkExpirationInterval: 15 * 60 * 1000,
+    expiration: 24 * 60 * 60 * 1000,
+  },
+  pool
+);
+app.use(
+  session({
+    name: "sid",
+    secret: process.env.SESSION_SECRET || "super-secret-key",
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    },
+  })
+);
 
-// ---------------- Start server ----------------
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+// Cookie generator & routes
+app.use("/middleware", cookieGenerator);
+app.use("/api-routes", Protectedapi);
+app.use("/api-routes", external);
+
+// ===== Start server =====
+app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
